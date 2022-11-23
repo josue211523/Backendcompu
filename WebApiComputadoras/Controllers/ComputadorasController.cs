@@ -1,4 +1,6 @@
 ﻿using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebApiComputadoras.DTOs;
@@ -13,6 +15,7 @@ namespace WebApiComputadoras.Controllers
     {
         private readonly ApplicationDbContext dbContext;
         private readonly IMapper mapper;
+        private readonly UserManager<IdentityUser> userManager;
 
         public ComputadorasController(ApplicationDbContext context, IMapper mapper)
         {
@@ -58,24 +61,26 @@ namespace WebApiComputadoras.Controllers
         }
 
         [HttpPost]
+        [AllowAnonymous]
         public async Task<ActionResult> Post([FromBody] ComputadorasDTO compuDto)
         {
+            var emailClaim = HttpContext.User.Claims.Where(claim => claim.Type == "email").FirstOrDefault();
 
-            var existeCompuMismaMarca = await dbContext.Computadoras.AnyAsync(x => x.Marca == compuDto.Marca);
+            var email = emailClaim.Value;
 
-            if (existeCompuMismaMarca)
+            var usuario = await userManager.FindByEmailAsync(email);
+            var usuarioId = usuario.Id;
+
+            var existe = await dbContext.Computadoras.AnyAsync(x => x.Marca == compuDto.Marca);
+
+            if (existe)
             {
-                return BadRequest($"Ya existe una computadora con la marca {compuDto.Marca}");
+                return BadRequest("Empresa existente");
             }
 
-            var compu = mapper.Map<Computadoras>(compuDto);
-
-            dbContext.Add(compu);
+            var computadora = mapper.Map<Computadoras>(compuDto);
+            dbContext.Add(computadora);
             await dbContext.SaveChangesAsync();
-
-            EscribirArchivos ea = new EscribirArchivos();
-            ea.DoWork_Post(compuDto.Marca);
-
             return Ok();
         }
 
